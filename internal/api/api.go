@@ -13,13 +13,16 @@ import (
 type Server struct {
 	store  *state.Store
 	router *http.ServeMux
+	apiKey string
 }
 
-// NewServer creates a new API server.
-func NewServer(store *state.Store) *Server {
+// NewServer creates a new API server. If apiKey is non-empty, all requests
+// must include "Authorization: Bearer <apiKey>" or they get a 401.
+func NewServer(store *state.Store, apiKey string) *Server {
 	s := &Server{
 		store:  store,
 		router: http.NewServeMux(),
+		apiKey: apiKey,
 	}
 	s.routes()
 	return s
@@ -35,6 +38,13 @@ func (s *Server) routes() {
 
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.apiKey != "" {
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if token != s.apiKey {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+	}
 	s.router.ServeHTTP(w, r)
 }
 
