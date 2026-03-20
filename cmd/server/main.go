@@ -79,6 +79,9 @@ func main() {
 				store.UpdateTelemetry(t)
 				alerts := alerting.CheckAlerts(t, store.GetPreviousAltitude(t.VehicleID), store.GetPreviousAltitudeTime(t.VehicleID))
 				for _, alert := range alerts {
+					if alert.Type == "low_battery" && !store.MarkLowBatteryAlerted(t.VehicleID) {
+						continue // Already alerted, skip
+					}
 					store.AddAlert(alert)
 					slog.Info("Alert triggered", "type", alert.Type, "vehicle_id", alert.VehicleID, "message", alert.Message)
 				}

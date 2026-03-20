@@ -14,6 +14,7 @@ type VehicleState struct {
 	PreviousAltitudeTime time.Time
 	LastSeen             time.Time
 	LostLinkAlerted      bool
+	LowBatteryAlerted    bool
 }
 
 // Store manages the in-memory state of all vehicles and alerts.
@@ -51,6 +52,9 @@ func (s *Store) UpdateTelemetry(t telemetry.Telemetry) {
 	vs.LastTelemetry = t
 	vs.LastSeen = time.Now()   // Use server time for reliability
 	vs.LostLinkAlerted = false // Reset lost link alert on new telemetry
+	if t.BatteryPct >= 20 {
+		vs.LowBatteryAlerted = false // Reset once battery recovers
+	}
 }
 
 // GetVehicle returns the state of a vehicle.
@@ -117,6 +121,19 @@ func (s *Store) CheckLostLinks() []telemetry.Alert {
 		}
 	}
 	return alerts
+}
+
+// MarkLowBatteryAlerted marks a vehicle as having had a low battery alert fired.
+// Returns false if already alerted (caller should skip firing the alert).
+func (s *Store) MarkLowBatteryAlerted(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	vs, exists := s.vehicles[id]
+	if !exists || vs.LowBatteryAlerted {
+		return false
+	}
+	vs.LowBatteryAlerted = true
+	return true
 }
 
 // GetPreviousAltitude returns the previous altitude for a vehicle.
