@@ -32,6 +32,12 @@ func main() {
 	if httpAddr == "" {
 		httpAddr = ":8081"
 	}
+	apiKey := os.Getenv("API_KEY")
+	if apiKey != "" {
+		slog.Info("API authentication enabled")
+	} else {
+		slog.Warn("API_KEY not set — authentication disabled")
+	}
 
 	// Context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -42,7 +48,7 @@ func main() {
 	teleCh := make(chan telemetry.Telemetry, 100) // Buffered channel for ingestion
 
 	listener := ingestion.NewListener(ctx, udpAddr, teleCh, store)
-	apiServer := api.NewServer(store)
+	apiServer := api.NewServer(store, apiKey)
 
 	// Signal handling
 	sigCh := make(chan os.Signal, 1)

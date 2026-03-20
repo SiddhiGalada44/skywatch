@@ -30,7 +30,12 @@ func setupServer() *Server {
 		Message:   "Battery low: 15.0%",
 		Timestamp: time.Now(),
 	})
-	return NewServer(store)
+	return NewServer(store, "") // no auth for most tests
+}
+
+func setupServerWithKey(key string) *Server {
+	store := state.NewStore()
+	return NewServer(store, key)
 }
 
 func TestHandleVehicles(t *testing.T) {
@@ -155,5 +160,55 @@ func TestHandleHealth_MethodNotAllowed(t *testing.T) {
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestAuth_ValidKey(t *testing.T) {
+	srv := setupServerWithKey("secret123")
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Authorization", "Bearer secret123")
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 with valid key, got %d", w.Code)
+	}
+}
+
+func TestAuth_MissingKey(t *testing.T) {
+	srv := setupServerWithKey("secret123")
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 with missing key, got %d", w.Code)
+	}
+}
+
+func TestAuth_WrongKey(t *testing.T) {
+	srv := setupServerWithKey("secret123")
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Authorization", "Bearer wrongkey")
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 with wrong key, got %d", w.Code)
+	}
+}
+
+func TestAuth_DisabledWhenNoKey(t *testing.T) {
+	srv := setupServer() // no apiKey set
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 when auth disabled, got %d", w.Code)
 	}
 }
