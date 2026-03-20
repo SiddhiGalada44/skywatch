@@ -131,12 +131,18 @@ func TestHandleHealth(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 
-	var result map[string]string
+	var result map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if result["status"] != "ok" {
-		t.Errorf("expected status ok, got %s", result["status"])
+		t.Errorf("expected status ok, got %v", result["status"])
+	}
+	if _, ok := result["messages_total"]; !ok {
+		t.Error("expected messages_total in health response")
+	}
+	if _, ok := result["dropped_total"]; !ok {
+		t.Error("expected dropped_total in health response")
 	}
 }
 

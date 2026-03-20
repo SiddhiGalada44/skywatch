@@ -2,6 +2,7 @@ package state
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"skywatch/internal/telemetry"
@@ -19,10 +20,37 @@ type VehicleState struct {
 
 // Store manages the in-memory state of all vehicles and alerts.
 type Store struct {
-	mu       sync.RWMutex
-	vehicles map[string]*VehicleState
-	alerts   []telemetry.Alert
+	mu             sync.RWMutex
+	vehicles       map[string]*VehicleState
+	alerts         []telemetry.Alert
+	messagesTotal  atomic.Int64
+	alertsTotal    atomic.Int64
+	droppedTotal   atomic.Int64
 }
+
+// Metrics holds counters for the /health endpoint.
+type Metrics struct {
+	Vehicles      int   `json:"vehicles"`
+	MessagesTotal int64 `json:"messages_total"`
+	AlertsTotal   int64 `json:"alerts_total"`
+	DroppedTotal  int64 `json:"dropped_total"`
+}
+
+// GetMetrics returns current server metrics.
+func (s *Store) GetMetrics() Metrics {
+	s.mu.RLock()
+	vehicleCount := len(s.vehicles)
+	s.mu.RUnlock()
+	return Metrics{
+		Vehicles:      vehicleCount,
+		MessagesTotal: s.messagesTotal.Load(),
+		AlertsTotal:   s.alertsTotal.Load(),
+		DroppedTotal:  s.droppedTotal.Load(),
+	}
+}
+
+// IncDropped increments the dropped message counter.
+func (s *Store) IncDropped() { s.droppedTotal.Add(1) }
 
 // NewStore creates a new state store.
 func NewStore() *Store {
@@ -52,6 +80,7 @@ func (s *Store) UpdateTelemetry(t telemetry.Telemetry) {
 	vs.LastTelemetry = t
 	vs.LastSeen = time.Now()   // Use server time for reliability
 	vs.LostLinkAlerted = false // Reset lost link alert on new telemetry
+	s.messagesTotal.Add(1)
 	if t.BatteryPct >= 20 {
 		vs.LowBatteryAlerted = false // Reset once battery recovers
 	}
@@ -83,6 +112,7 @@ func (s *Store) GetAllVehicles() map[string]telemetry.Telemetry {
 func (s *Store) AddAlert(alert telemetry.Alert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.alertsTotal.Add(1)
 	s.alerts = append(s.alerts, alert)
 	// Keep only last 50 alerts
 	if len(s.alerts) > 50 {

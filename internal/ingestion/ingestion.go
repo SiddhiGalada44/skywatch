@@ -83,21 +83,28 @@ func (p *Parser) Parse(data []byte) (telemetry.Telemetry, error) {
 	return result, nil
 }
 
+// Dropper is implemented by anything that can count dropped messages.
+type Dropper interface {
+	IncDropped()
+}
+
 // Listener listens for UDP telemetry messages.
 type Listener struct {
-	addr   string
-	parser *Parser
-	teleCh chan<- telemetry.Telemetry
-	ctx    context.Context
+	addr    string
+	parser  *Parser
+	teleCh  chan<- telemetry.Telemetry
+	ctx     context.Context
+	dropper Dropper
 }
 
 // NewListener creates a new UDP listener.
-func NewListener(ctx context.Context, addr string, teleCh chan<- telemetry.Telemetry) *Listener {
+func NewListener(ctx context.Context, addr string, teleCh chan<- telemetry.Telemetry, dropper Dropper) *Listener {
 	return &Listener{
-		addr:   addr,
-		parser: NewParser(),
-		teleCh: teleCh,
-		ctx:    ctx,
+		addr:    addr,
+		parser:  NewParser(),
+		teleCh:  teleCh,
+		ctx:     ctx,
+		dropper: dropper,
 	}
 }
 
@@ -135,6 +142,9 @@ func (l *Listener) Start() error {
 			return nil
 		default:
 			slog.Warn("Telemetry channel full, dropping message", "vehicle_id", t.VehicleID)
+			if l.dropper != nil {
+				l.dropper.IncDropped()
+			}
 		}
 	}
 }

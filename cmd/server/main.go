@@ -41,7 +41,7 @@ func main() {
 	store := state.NewStore()
 	teleCh := make(chan telemetry.Telemetry, 100) // Buffered channel for ingestion
 
-	listener := ingestion.NewListener(ctx, udpAddr, teleCh)
+	listener := ingestion.NewListener(ctx, udpAddr, teleCh, store)
 	apiServer := api.NewServer(store)
 
 	// Signal handling
