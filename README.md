@@ -53,6 +53,11 @@ UDP_ADDR=:9090 HTTP_ADDR=:9091 ./server
 go test ./...
 ```
 
+Run with benchmarks:
+```bash
+go test ./... -bench=. -benchmem
+```
+
 ### Run Simulator
 ```bash
 ./simulator
@@ -83,9 +88,24 @@ curl http://localhost:8081/alerts
 ### Alerting Logic
 - **Per-Message Checks**: Battery and altitude alerts checked on each telemetry receipt.
 - **Periodic Lost Link**: Separate goroutine checks for stale vehicles every second to avoid false positives from network jitter.
+- **Alert Deduplication**: Low battery and lost link alerts fire once per event, not repeatedly. The flag resets when the condition clears (e.g. battery recovers above 20%).
 
 ### No External Dependencies
 - **Pure stdlib**: Keeps binary small and deployment simple. slog for structured JSON logging.
+
+## Test Coverage
+
+| Package | Tests |
+|---|---|
+| `internal/alerting` | Low battery, altitude drop, no false alerts |
+| `internal/ingestion` | Valid parse, invalid JSON, missing fields, bad values + benchmark |
+| `internal/state` | CRUD, alert cap, copy safety, lost link dedup, low battery dedup |
+| `internal/api` | All endpoints, 404, 405 method checks |
+
+Benchmark on Apple M3:
+```
+BenchmarkParser_Parse-8    ~800k runs    1517 ns/op    232 B/op    6 allocs/op
+```
 
 ## What I'd Add with More Time
 
@@ -93,6 +113,7 @@ curl http://localhost:8081/alerts
 - **WebSocket Live Feed**: Real-time updates for connected clients (e.g., ground station UI).
 - **Kalman Filter**: Position smoothing and prediction for better anomaly detection.
 - **Authentication**: API key validation for telemetry sources.
+- **Rate Limiting**: Per-client request throttling to protect the HTTP API.
 - **Metrics**: Prometheus integration for monitoring ingestion rates and alert frequencies.
 - **Configuration**: YAML/JSON config file support for full threshold and timeout tuning (ports are already configurable via env vars).
 - **Docker**: Containerized deployment with docker-compose for server + simulator.
